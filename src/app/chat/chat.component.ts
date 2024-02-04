@@ -1,7 +1,9 @@
-import { Component, Input } from '@angular/core';
+import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Client, IMessage, StompConfig, Versions } from '@stomp/stompjs';
 import SockJS from 'sockjs-client/dist/sockjs';
+import { Message } from './chat.model';
 @Component({
   selector: 'app-chat',
   standalone: true,
@@ -11,10 +13,15 @@ import SockJS from 'sockjs-client/dist/sockjs';
 })
 export class ChatComponent {
   private client: Client = new Client;
-  public inMessages: string[] = [];
+  public inMessages: Message[] = [];
   outMessage: string = '';
   crypt: string = '';
-  constructor() {
+  chatCode: string = '';
+  username: string = '';
+  constructor(private route: ActivatedRoute) {
+    const navigationState = history.state;
+    this.chatCode = navigationState.code;
+    this.username = navigationState.user;
     this.inMessages = [];
   }
   ngOnInit(): void {
@@ -31,9 +38,9 @@ export class ChatComponent {
     this.client = new Client(stompConfig);
     this.client.onConnect = () => {
       console.log('Conexão estabelecida com sucesso. Inscrevendo-se...');
-      this.client.subscribe('/topic/public', (message: any) => {
+      this.client.subscribe('/topic/'+ this.chatCode, (message: any) => {
         this.onMessageReceived(message)
-        this.inMessages.push(JSON.parse(message.body).content);
+        this.inMessages.push(JSON.parse(message.body));
       });
     };
     this.client.activate();
@@ -45,10 +52,11 @@ export class ChatComponent {
 
   sendMessage() {
     var chatMessage = {
-      Chat: 1,
+      chatId: this.chatCode,
       content: this.outMessage,
-      Id: 1
+      sender: this.username,
     };
+    console.log(chatMessage);
     this.client.publish({ destination: "/app/sendMessage", body: JSON.stringify(chatMessage) });
     this.outMessage = '';
   };
