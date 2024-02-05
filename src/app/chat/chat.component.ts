@@ -4,6 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import { Client, IMessage, StompConfig, Versions } from '@stomp/stompjs';
 import SockJS from 'sockjs-client/dist/sockjs';
 import { Message } from './chat.model';
+import CryptoJS from 'crypto-js';
 @Component({
   selector: 'app-chat',
   standalone: true,
@@ -38,25 +39,43 @@ export class ChatComponent {
     this.client = new Client(stompConfig);
     this.client.onConnect = () => {
       console.log('Conexão estabelecida com sucesso. Inscrevendo-se...');
-      this.client.subscribe('/topic/'+ this.chatCode, (message: any) => {
-        this.onMessageReceived(message)
-        this.inMessages.push(JSON.parse(message.body));
+      this.client.subscribe('/topic/' + this.chatCode, (message: any) => {
+        this.inMessages.push(this.parseIncomingMessage(message));
       });
     };
     this.client.activate();
   }
 
-  onMessageReceived(message: IMessage): string {
-    return JSON.parse(message.body).content
+
+
+  parseIncomingMessage(message: IMessage): Message {
+    var inMessage = {
+      chatId: JSON.parse(message.body).chatCode,
+      content: this.decryptMessage(JSON.parse(message.body).content, this.crypt),
+      sender: this.decryptMessage(JSON.parse(message.body).sender, this.crypt),
+    };
+
+    return inMessage;
+
+  }
+  encryptMessage(message: string, secretCode: string): string {
+    const encryptedMessage = CryptoJS.AES.encrypt(message, secretCode).toString();
+    return encryptedMessage;
+  }
+
+  decryptMessage(encryptedMessage: string, secretCode: string): string {
+    const decryptedBytes = CryptoJS.AES.decrypt(encryptedMessage, secretCode);
+    const decryptedMessage = decryptedBytes.toString(CryptoJS.enc.Utf8);
+
+    return decryptedMessage;
   }
 
   sendMessage() {
     var chatMessage = {
       chatId: this.chatCode,
-      content: this.outMessage,
-      sender: this.username,
+      content: this.encryptMessage(this.outMessage, this.crypt),
+      sender: this.encryptMessage(this.username, this.crypt),
     };
-    console.log(chatMessage);
     this.client.publish({ destination: "/app/sendMessage", body: JSON.stringify(chatMessage) });
     this.outMessage = '';
   };
